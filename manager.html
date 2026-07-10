@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Twitch Downloader — загрузка VOD</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0e0e10;
+      color: #efeff1;
+      font: 14px/1.5 Inter, Roobert, "Helvetica Neue", Arial, sans-serif;
+    }
+    .card {
+      width: 560px;
+      max-width: calc(100vw - 40px);
+      background: #18181b;
+      border: 1px solid #35353b;
+      border-radius: 10px;
+      padding: 24px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+    }
+    h1 {
+      font-size: 18px;
+      margin: 0 0 6px;
+    }
+    .meta {
+      color: #adadb8;
+      font-size: 13px;
+      margin-bottom: 18px;
+    }
+    .meta div { margin-bottom: 2px; }
+    .hint {
+      color: #adadb8;
+      font-size: 13px;
+    }
+    button {
+      border: none;
+      border-radius: 6px;
+      padding: 10px 18px;
+      font: 600 14px/1.4 inherit;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .primary { background: #9146ff; color: #fff; }
+    .primary:hover { background: #772ce8; }
+    .danger { background: #3f3f46; color: #efeff1; }
+    .danger:hover { background: #e03c3c; }
+    .bar {
+      height: 10px;
+      background: #26262c;
+      border-radius: 5px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+    #barFill {
+      height: 100%;
+      width: 0;
+      background: #9146ff;
+      transition: width 0.3s;
+    }
+    #stats {
+      color: #adadb8;
+      font-size: 13px;
+      margin-bottom: 14px;
+      white-space: pre-line;
+    }
+    #doneBlock { color: #6dde8b; }
+    #errorBlock { color: #ff8280; }
+    #doneBlock .path, #errorBlock .detail {
+      color: #adadb8;
+      font-size: 13px;
+      margin-top: 6px;
+      word-break: break-all;
+    }
+    #errorBlock button { margin-top: 12px; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1 id="pageTitle">Загрузка VOD</h1>
+    <div class="meta" id="meta"></div>
+
+    <div id="startBlock">
+      <p class="hint">Нажмите кнопку и выберите, куда сохранить файл, — загрузка начнётся сразу после этого. Не закрывайте вкладку до завершения.</p>
+      <button id="startBtn" class="primary">Выбрать файл и начать</button>
+    </div>
+
+    <div id="progressBlock" hidden>
+      <div class="bar"><div id="barFill"></div></div>
+      <div id="stats"></div>
+      <button id="cancelBtn" class="danger">Отменить</button>
+    </div>
+
+    <div id="doneBlock" hidden></div>
+    <div id="errorBlock" hidden></div>
+  </div>
+
+  <script src="lib/mux.min.js"></script>
+  <script src="shared.js"></script>
+  <script src="manager.js"></script>
+</body>
+</html>
