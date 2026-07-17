@@ -8,6 +8,10 @@
 const DEFAULT_CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko';
 const GQL_URL = 'https://gql.twitch.tv/gql';
 
+function t(key, substitutions) {
+  return chrome.i18n.getMessage(key, substitutions) || key;
+}
+
 async function getClientId() {
   const { clientId } = await chrome.storage.local.get('clientId');
   return clientId || DEFAULT_CLIENT_ID;
@@ -17,7 +21,7 @@ async function rediscoverClientId() {
   const resp = await fetch('https://www.twitch.tv/', { credentials: 'omit' });
   const html = await resp.text();
   const m = html.match(/clientId\s*[:=]\s*"([a-z0-9]{20,40})"/i);
-  if (!m) throw new Error('Не удалось определить актуальный Client-ID Twitch');
+  if (!m) throw new Error(t('clientIdNotFound'));
   await chrome.storage.local.set({ clientId: m[1] });
   return m[1];
 }
@@ -32,7 +36,7 @@ async function gqlRequest(body, clientId) {
   try {
     return JSON.parse(text);
   } catch (_) {
-    throw new Error('Twitch GQL недоступен (HTTP ' + resp.status + ')');
+    throw new Error(t('gqlUnavailable', String(resp.status)));
   }
 }
 
@@ -58,7 +62,7 @@ async function gql(query, variables) {
     throw new Error('Twitch GQL: ' + json.errors.map((e) => e.message).join('; '));
   }
   if (!json || !json.data) {
-    throw new Error('Twitch GQL: пустой ответ (' + JSON.stringify(json).slice(0, 200) + ')');
+    throw new Error(t('gqlEmpty', JSON.stringify(json).slice(0, 200)));
   }
   return json.data;
 }
@@ -105,7 +109,7 @@ function parseMasterPlaylist(text) {
     const fps = Math.round(parseFloat(attrs['FRAME-RATE'] || '30')) || 30;
     const bandwidth = parseInt(attrs['BANDWIDTH'] || '0', 10) || 0;
     const isSource = group === 'chunked';
-    let label = height ? height + 'p' + (fps !== 30 ? fps : '') : (group || 'видео');
+    let label = height ? height + 'p' + (fps !== 30 ? fps : '') : (group || t('videoFallback'));
     if (isSource) label += ' (source)';
     out.push({ label, url, height, fps, bandwidth, isSource });
   }
@@ -115,16 +119,16 @@ function parseMasterPlaylist(text) {
 
 async function getVodInfo(vodId) {
   const d = await gql(VOD_QUERY, { id: vodId });
-  if (!d.video) throw new Error('VOD не найден: удалён или недоступен');
+  if (!d.video) throw new Error(t('vodNotFound'));
   const token = d.videoPlaybackAccessToken;
-  if (!token) throw new Error('Twitch не выдал токен воспроизведения для этого VOD');
+  if (!token) throw new Error(t('vodTokenMissing'));
   try {
     const auth = JSON.parse(token.value).authorization;
     if (auth && auth.forbidden) {
-      throw new Error('Доступ запрещён: скорее всего, VOD только для подписчиков канала');
+      throw new Error(t('subscriberOnly'));
     }
   } catch (e) {
-    if (String(e.message).startsWith('Доступ запрещён')) throw e;
+    if (String(e.message) === t('subscriberOnly')) throw e;
   }
   const usherUrl = 'https://usher.ttvnw.net/vod/' + encodeURIComponent(vodId) + '.m3u8' +
     '?sig=' + encodeURIComponent(token.signature) +
@@ -132,11 +136,11 @@ async function getVodInfo(vodId) {
     '&allow_source=true&allow_audio_only=false&player=twitchweb';
   const resp = await fetch(usherUrl);
   if (!resp.ok) {
-    if (resp.status === 403) throw new Error('usher вернул 403: вероятно, VOD только для подписчиков');
-    throw new Error('usher.ttvnw.net ответил ' + resp.status);
+    if (resp.status === 403) throw new Error(t('usherForbidden'));
+    throw new Error(t('usherStatus', String(resp.status)));
   }
   const qualities = parseMasterPlaylist(await resp.text());
-  if (!qualities.length) throw new Error('В мастер-плейлисте не найдено ни одного качества');
+  if (!qualities.length) throw new Error(t('noQualities'));
   return {
     kind: 'vod',
     id: vodId,
@@ -167,10 +171,10 @@ const CLIP_QUERY = `query($slug: ID!) {
 async function getClipInfo(slug) {
   const d = await gql(CLIP_QUERY, { slug });
   const clip = d.clip;
-  if (!clip) throw new Error('Клип не найден: удалён или недоступен');
+  if (!clip) throw new Error(t('clipNotFound'));
   const token = clip.playbackAccessToken;
   if (!token || !Array.isArray(clip.videoQualities) || !clip.videoQualities.length) {
-    throw new Error('Twitch не выдал ссылки на файл клипа');
+    throw new Error(t('clipUrlsMissing'));
   }
   const qualities = clip.videoQualities
     .filter((q) => q.sourceURL)
@@ -217,7 +221,7 @@ async function handleMessage(msg) {
       await chrome.storage.local.remove(msg.jobId);
       return {};
     default:
-      throw new Error('Неизвестный тип сообщения: ' + msg.type);
+      throw new Error(t('unknownMessage', String(msg.type)));
   }
 }
 

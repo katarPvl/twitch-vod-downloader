@@ -1,8 +1,8 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Twitch Downloader — загрузка VOD</title>
+  <title>Twitch Downloader</title>
   <style>
     body {
       margin: 0;
@@ -82,18 +82,18 @@
 </head>
 <body>
   <div class="card">
-    <h1 id="pageTitle">Загрузка VOD</h1>
+    <h1 id="pageTitle"></h1>
     <div class="meta" id="meta"></div>
 
     <div id="startBlock">
-      <p class="hint">Нажмите кнопку и выберите, куда сохранить файл, — загрузка начнётся сразу после этого. Не закрывайте вкладку до завершения.</p>
-      <button id="startBtn" class="primary">Выбрать файл и начать</button>
+      <p class="hint" id="startHint"></p>
+      <button id="startBtn" class="primary"></button>
     </div>
 
     <div id="progressBlock" hidden>
       <div class="bar"><div id="barFill"></div></div>
       <div id="stats"></div>
-      <button id="cancelBtn" class="danger">Отменить</button>
+      <button id="cancelBtn" class="danger"></button>
     </div>
 
     <div id="doneBlock" hidden></div>

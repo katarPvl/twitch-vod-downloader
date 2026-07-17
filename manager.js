@@ -22,6 +22,13 @@ const ui = {
   errorBlock: document.getElementById('errorBlock'),
 };
 
+document.documentElement.lang = chrome.i18n.getUILanguage().split('-')[0];
+document.title = t('managerPageTitle');
+document.getElementById('pageTitle').textContent = t('managerHeading');
+document.getElementById('startHint').textContent = t('managerHint');
+ui.startBtn.textContent = t('chooseFile');
+ui.cancelBtn.textContent = t('cancel');
+
 let running = false;
 
 // fmtTime и fmtBytes — в shared.js (подключён в manager.html)
@@ -36,10 +43,10 @@ function showError(message) {
   ui.errorBlock.hidden = false;
   ui.errorBlock.innerHTML = '';
   const head = document.createElement('div');
-  head.textContent = 'Ошибка: ' + message;
+  head.textContent = t('errorPrefix', message);
   const retry = document.createElement('button');
   retry.className = 'primary';
-  retry.textContent = 'Попробовать заново';
+  retry.textContent = t('tryAgain');
   retry.addEventListener('click', () => location.reload());
   ui.errorBlock.append(head, retry);
 }
@@ -80,20 +87,20 @@ async function download(job, fileHandle) {
     aborted = true;
     for (const c of controllers) c.abort();
     ui.cancelBtn.disabled = true;
-    ui.cancelBtn.textContent = 'Отменяю…';
+    ui.cancelBtn.textContent = t('cancelling');
   };
 
   try {
     writable = await fileHandle.createWritable();
     const resp = await fetch(job.playlistUrl);
-    if (!resp.ok) throw new Error('не удалось получить плейлист (HTTP ' + resp.status + ')');
+    if (!resp.ok) throw new Error(t('playlistFetchFailed', String(resp.status)));
     const all = parseMediaPlaylist(await resp.text(), job.playlistUrl);
-    if (!all.length) throw new Error('плейлист пуст');
+    if (!all.length) throw new Error(t('playlistEmpty'));
 
     const segs = all.filter(
       (s) => s.start + s.duration > job.fromSec && s.start < job.toSec
     );
-    if (!segs.length) throw new Error('в выбранном отрезке нет сегментов');
+    if (!segs.length) throw new Error(t('noSegments'));
 
     // Транс-мукс: один Transmuxer на всю загрузку, сегменты подаются строго
     // по порядку — так сохраняется непрерывность таймстемпов.
@@ -118,20 +125,20 @@ async function download(job, fileHandle) {
 
     async function fetchSegment(seg) {
       for (let attempt = 0; ; attempt++) {
-        if (aborted) throw new Error('Загрузка отменена');
+        if (aborted) throw new Error(t('downloadCancelledError'));
         const ac = new AbortController();
         controllers.add(ac);
         try {
           const r = await fetch(seg.url, { signal: ac.signal });
           if (!r.ok) {
-            const err = new Error('HTTP ' + r.status + ' на сегменте');
+            const err = new Error(t('segmentHttpError', String(r.status)));
             // 4xx (кроме 408/429) повтором не лечатся — падаем сразу
             err.fatal = r.status >= 400 && r.status < 500 && r.status !== 408 && r.status !== 429;
             throw err;
           }
           return await r.arrayBuffer();
         } catch (e) {
-          if (aborted) throw new Error('Загрузка отменена');
+          if (aborted) throw new Error(t('downloadCancelledError'));
           if (e.fatal || attempt >= RETRIES) throw e;
           await sleep(500 * Math.pow(2, attempt));
         } finally {
@@ -156,7 +163,7 @@ async function download(job, fileHandle) {
 
     async function writer() {
       while (writeIdx < segs.length) {
-        if (aborted) throw new Error('Загрузка отменена');
+        if (aborted) throw new Error(t('downloadCancelledError'));
         const buf = buffers.get(writeIdx);
         if (!buf) {
           await sleep(50);
@@ -186,10 +193,10 @@ async function download(job, fileHandle) {
       const remaining = segs.length - writeIdx;
       const avgSegBytes = writeIdx > 0 ? bytesWritten / writeIdx : 0;
       const eta = speed > 0 && avgSegBytes > 0 ? (remaining * avgSegBytes) / speed : 0;
-      ui.stats.textContent =
-        pct + '% — сегмент ' + writeIdx + ' из ' + segs.length + '\n' +
-        'Скачано: ' + fmtBytes(bytesDone) + ' · Скорость: ' + fmtBytes(speed) + '/с' +
-        (eta > 1 ? ' · Осталось примерно ' + fmtTime(eta) : '');
+      ui.stats.textContent = t('progress', [
+        String(pct), String(writeIdx), String(segs.length), fmtBytes(bytesDone), fmtBytes(speed),
+        eta > 1 ? t('eta', fmtTime(eta)) : '',
+      ]);
     }
 
     running = true;
@@ -219,7 +226,7 @@ async function download(job, fileHandle) {
       await writable.abort();
       ui.progressBlock.hidden = true;
       ui.doneBlock.hidden = false;
-      ui.doneBlock.textContent = 'Загрузка отменена, файл не сохранён.';
+      ui.doneBlock.textContent = t('cancelledNoFile');
       chrome.runtime.sendMessage({ type: 'cleanupJob', jobId: currentJobId });
       return;
     }
@@ -230,7 +237,7 @@ async function download(job, fileHandle) {
     ui.doneBlock.hidden = false;
     ui.doneBlock.innerHTML = '';
     const head = document.createElement('div');
-    head.textContent = 'Готово! Файл сохранён (' + fmtBytes(bytesWritten) + ').';
+    head.textContent = t('saved', fmtBytes(bytesWritten));
     const path = document.createElement('div');
     path.className = 'path';
     path.textContent = job.filename;
@@ -246,7 +253,7 @@ async function download(job, fileHandle) {
     if (userCancelled) {
       ui.progressBlock.hidden = true;
       ui.doneBlock.hidden = false;
-      ui.doneBlock.textContent = 'Загрузка отменена, файл не сохранён.';
+      ui.doneBlock.textContent = t('cancelledNoFile');
       return;
     }
     showError((e && e.message) || String(e));
@@ -260,13 +267,13 @@ let currentJobId = '';
 async function init() {
   currentJobId = location.hash.slice(1);
   if (!currentJobId) {
-    showError('страница открыта без параметров задачи. Запускайте загрузку кнопкой «Скачать» на странице Twitch.');
+    showError(t('missingJobParams'));
     return;
   }
   const store = await chrome.storage.local.get(currentJobId);
   const job = store[currentJobId];
   if (!job) {
-    showError('задача не найдена (возможно, уже выполнена). Запустите загрузку заново со страницы Twitch.');
+    showError(t('jobNotFound'));
     return;
   }
 
@@ -275,12 +282,12 @@ async function init() {
   ui.meta.innerHTML = '';
   const rows = [
     job.channel + ' — ' + job.title,
-    'Качество: ' + job.qualityLabel,
-    'Отрезок: ' + (isPartial
+    t('qualityValue', job.qualityLabel),
+    t('rangeValue', isPartial
       ? fmtTime(job.fromSec) + ' – ' + fmtTime(job.toSec)
-      : 'весь VOD (' + fmtTime(job.lengthSeconds) + ')'),
-    estBytes ? 'Ожидаемый размер: примерно ' + fmtBytes(estBytes) : '',
-    'Файл: ' + job.filename,
+      : t('wholeVod', fmtTime(job.lengthSeconds))),
+    estBytes ? t('estimatedSize', fmtBytes(estBytes)) : '',
+    t('fileValue', job.filename),
   ];
   for (const r of rows) {
     if (!r) continue;
@@ -298,7 +305,7 @@ async function init() {
     try {
       handle = await window.showSaveFilePicker({
         suggestedName: job.filename,
-        types: [{ description: 'Видео MP4', accept: { 'video/mp4': ['.mp4'] } }],
+        types: [{ description: t('mp4Video'), accept: { 'video/mp4': ['.mp4'] } }],
       });
     } catch (e) {
       ui.startBtn.disabled = false;
@@ -306,7 +313,7 @@ async function init() {
     }
     ui.startBlock.hidden = true;
     ui.progressBlock.hidden = false;
-    ui.stats.textContent = 'Получаю плейлист…';
+    ui.stats.textContent = t('gettingPlaylist');
     download(job, handle).catch((e) => showError((e && e.message) || String(e)));
   });
 }
@@ -314,7 +321,7 @@ async function init() {
 window.addEventListener('beforeunload', (e) => {
   if (running) {
     e.preventDefault();
-    e.returnValue = 'Загрузка ещё идёт';
+    e.returnValue = t('downloadInProgress');
   }
 });
 
