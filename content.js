@@ -90,7 +90,7 @@
     const b = document.createElement('button');
     b.id = BTN_ID;
     b.type = 'button';
-    b.textContent = '⬇ Скачать';
+    b.textContent = '⬇ ' + t('download');
     b.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
@@ -116,22 +116,22 @@
     const p = document.createElement('div');
     p.id = PANEL_ID;
     p.innerHTML = `
-      <div class="tvd-title">Скачать ${info.kind === 'vod' ? 'запись стрима' : 'клип'}</div>
+      <div class="tvd-title">${t(info.kind === 'vod' ? 'downloadVod' : 'downloadClip')}</div>
       <div class="tvd-meta" id="tvd-meta">&nbsp;</div>
       <div class="tvd-form" id="tvd-form" hidden>
-        <label class="tvd-label">Качество
+        <label class="tvd-label">${t('quality')}
           <select id="tvd-quality"></select>
         </label>
         <div class="tvd-range" id="tvd-range" hidden>
-          <label class="tvd-label tvd-half">От
+          <label class="tvd-label tvd-half">${t('from')}
             <input id="tvd-from" type="text" placeholder="0:00:00" spellcheck="false">
           </label>
-          <label class="tvd-label tvd-half">До
-            <input id="tvd-to" type="text" placeholder="до конца" spellcheck="false">
+          <label class="tvd-label tvd-half">${t('to')}
+            <input id="tvd-to" type="text" placeholder="${t('untilEnd')}" spellcheck="false">
           </label>
         </div>
         <div class="tvd-est" id="tvd-est"></div>
-        <button type="button" class="tvd-download" id="tvd-download">Скачать</button>
+        <button type="button" class="tvd-download" id="tvd-download">${t('download')}</button>
       </div>
       <div class="tvd-status" id="tvd-status"></div>
     `;
@@ -153,7 +153,7 @@
 
   async function loadInfo(info, panel) {
     if (!videoInfo) {
-      setStatus('Получаю информацию о видео…');
+      setStatus(t('loadingVideoInfo'));
       let resp;
       try {
         resp = await chrome.runtime.sendMessage(
@@ -168,7 +168,7 @@
       // повторный renderForm навесил бы второй обработчик «Скачать»
       if (el(PANEL_ID) !== panel) return;
       if (!resp || !resp.ok) {
-        setStatus('Ошибка: ' + (resp ? resp.error : 'нет ответа от расширения'), true);
+        setStatus(t('errorPrefix', resp ? resp.error : t('noExtensionResponse')), true);
         return;
       }
       videoInfo = resp.data;
@@ -208,11 +208,11 @@
     if (v.kind !== 'vod') return { from: 0, to: v.lengthSeconds };
     let from = parseTime(el('tvd-from').value);
     let to = parseTime(el('tvd-to').value);
-    if (Number.isNaN(from) || Number.isNaN(to)) return { error: 'Неверный формат времени. Пример: 1:23:45' };
+    if (Number.isNaN(from) || Number.isNaN(to)) return { error: t('invalidTime') };
     if (from === null) from = 0;
     if (to === null || to > v.lengthSeconds) to = v.lengthSeconds;
-    if (from >= to) return { error: 'Время «От» должно быть меньше «До»' };
-    if (from >= v.lengthSeconds) return { error: 'Время «От» больше длины видео (' + fmtTime(v.lengthSeconds) + ')' };
+    if (from >= to) return { error: t('fromBeforeTo') };
+    if (from >= v.lengthSeconds) return { error: t('fromBeyondVideo', fmtTime(v.lengthSeconds)) };
     return { from, to };
   }
 
@@ -221,7 +221,7 @@
     if (!est) return;
     const q = selectedQuality(v);
     if (v.kind !== 'vod' || !q.bandwidth) {
-      est.textContent = v.kind === 'vod' ? '' : 'Длительность: ' + fmtTime(v.lengthSeconds);
+      est.textContent = v.kind === 'vod' ? '' : t('duration', fmtTime(v.lengthSeconds));
       return;
     }
     const r = readRange(v);
@@ -230,7 +230,7 @@
       return;
     }
     const bytes = (q.bandwidth / 8) * (r.to - r.from);
-    est.textContent = 'Отрезок ' + fmtTime(r.from) + '–' + fmtTime(r.to) + ', примерно ' + fmtBytes(bytes);
+    est.textContent = t('rangeEstimate', [fmtTime(r.from), fmtTime(r.to), fmtBytes(bytes)]);
   }
 
   async function submit(v) {
@@ -239,7 +239,7 @@
     if (v.kind === 'clip') {
       const filename = sanitizeName(`${v.channel}_${v.title}_${v.date}_${q.label}`) + '.mp4';
       btn.disabled = true;
-      setStatus('Запускаю загрузку…');
+      setStatus(t('startingDownload'));
       let resp;
       try {
         resp = await chrome.runtime.sendMessage({ type: 'downloadClip', url: q.url, filename });
@@ -247,10 +247,10 @@
         resp = { ok: false, error: (e && e.message) || String(e) };
       }
       if (resp && resp.ok) {
-        setStatus('Загрузка начата — файл появится в загрузках браузера.');
+        setStatus(t('clipDownloadStarted'));
       } else {
         btn.disabled = false;
-        setStatus('Ошибка: ' + (resp ? resp.error : 'нет ответа'), true);
+        setStatus(t('errorPrefix', resp ? resp.error : t('noResponse')), true);
       }
       return;
     }
@@ -277,7 +277,7 @@
       lengthSeconds: v.lengthSeconds,
     };
     btn.disabled = true;
-    setStatus('Открываю менеджер загрузки…');
+    setStatus(t('openingManager'));
     let resp;
     try {
       resp = await chrome.runtime.sendMessage({ type: 'startVodDownload', job });
@@ -286,9 +286,9 @@
     }
     btn.disabled = false;
     if (resp && resp.ok) {
-      setStatus('Менеджер загрузки открыт в новой вкладке.');
+      setStatus(t('managerOpened'));
     } else {
-      setStatus('Ошибка: ' + (resp ? resp.error : 'нет ответа'), true);
+      setStatus(t('errorPrefix', resp ? resp.error : t('noResponse')), true);
     }
   }
 })();

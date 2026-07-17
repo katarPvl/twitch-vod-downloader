@@ -9,8 +9,12 @@ function fmtTime(sec) {
   return h + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
 }
 
+function t(key, substitutions) {
+  return chrome.i18n.getMessage(key, substitutions) || key;
+}
+
 function fmtBytes(n) {
-  if (n >= 1e9) return (n / 1e9).toFixed(2) + ' ГБ';
-  if (n >= 1e6) return (n / 1e6).toFixed(1) + ' МБ';
-  return Math.max(1, Math.round(n / 1e3)) + ' КБ';
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + ' ' + t('unitGB');
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + ' ' + t('unitMB');
+  return Math.max(1, Math.round(n / 1e3)) + ' ' + t('unitKB');
 }
